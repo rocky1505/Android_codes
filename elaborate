@@ -1,0 +1,1095 @@
+5. GPS (get current location using LocationManager)
+
+Permissions (manifest):
+
+<!-- AndroidManifest.xml (add inside <manifest> before <application>) -->
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+
+Layout: res/layout/activity_main.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="16dp"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <Button
+        android:id="@+id/btn_get_location"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Get Current Location" />
+
+    <TextView
+        android:id="@+id/tv_location"
+        android:layout_marginTop="16dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Location will appear here" />
+</LinearLayout>
+
+
+Activity: MainActivity.java
+
+package com.example.gpsapp;
+
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+public class MainActivity extends AppCompatActivity implements LocationListener {
+    private static final int REQ_PERM = 1001;
+    private LocationManager locationManager;
+    private TextView tvLocation;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        tvLocation = findViewById(R.id.tv_location);
+        Button btn = findViewById(R.id.btn_get_location);
+
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+
+        btn.setOnClickListener(v -> {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQ_PERM);
+            } else {
+                requestLocation();
+            }
+        });
+    }
+
+    private void requestLocation() {
+        try {
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 1, this);
+                tvLocation.setText("Waiting for GPS fix...");
+                Location last = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if (last != null) {
+                    onLocationChanged(last);
+                }
+            } else {
+                tvLocation.setText("GPS provider disabled. Please enable GPS.");
+            }
+        } catch (SecurityException e) {
+            tvLocation.setText("Permission error: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void onLocationChanged(@NonNull Location location) {
+        String txt = String.format("Lat: %s\nLon: %s\nAlt: %s\nAcc: %s m",
+                location.getLatitude(), location.getLongitude(),
+                location.hasAltitude() ? location.getAltitude() : 0,
+                location.hasAccuracy() ? location.getAccuracy() : 0);
+        tvLocation.setText(txt);
+        // optionally remove updates if only one reading needed:
+        locationManager.removeUpdates(this);
+    }
+
+    @Override public void onStatusChanged(String provider, int status, Bundle extras) {}
+    @Override public void onProviderEnabled(@NonNull String provider) {}
+    @Override public void onProviderDisabled(@NonNull String provider) {}
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] perms, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, perms, grantResults);
+        if (requestCode == REQ_PERM) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                requestLocation();
+            } else {
+                tvLocation.setText("Location permission denied.");
+            }
+        }
+    }
+}
+
+
+Notes: This uses LocationManager (no Play Services) and requests runtime permission. For production use, you may prefer FusedLocationProvider.
+
+6. Linking a webpage (open URL in browser / WebView)
+
+Two options: open external browser Intent (simple) or show in-app WebView. I’ll provide both.
+
+A) Open external browser (Intent)
+
+Layout: simple button (reuse previous layout or create a new one with button id btn_open_url).
+
+<Button
+    android:id="@+id/btn_open_url"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Open Website" />
+
+
+Activity snippet:
+
+Button open = findViewById(R.id.btn_open_url);
+open.setOnClickListener(v -> {
+    String url = "https://www.example.com";
+    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+    startActivity(intent);
+});
+
+B) In-app WebView
+
+Manifest: add internet permission:
+
+<uses-permission android:name="android.permission.INTERNET"/>
+
+
+Layout: res/layout/activity_webview.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+</FrameLayout>
+
+
+Activity: WebViewActivity.java
+
+package com.example.webviewapp;
+
+import android.os.Bundle;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class WebViewActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_webview);
+        WebView wv = findViewById(R.id.webview);
+        WebSettings s = wv.getSettings();
+        s.setJavaScriptEnabled(true);
+        wv.setWebViewClient(new WebViewClient()); // keep navigation in the app
+        wv.loadUrl("https://www.example.com");
+    }
+}
+
+7. Database connection like SQLite (basic CRUD with SQLiteOpenHelper)
+
+Manifest: none extra.
+
+DB helper: MyDatabaseHelper.java
+
+package com.example.sqliteapp;
+
+import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
+
+public class MyDatabaseHelper extends SQLiteOpenHelper {
+    private static final String DB_NAME = "notes.db";
+    private static final int DB_VER = 1;
+    private static final String TABLE = "notes";
+    private static final String COL_ID = "id";
+    private static final String COL_TEXT = "text";
+
+    public MyDatabaseHelper(Context ctx) {
+        super(ctx, DB_NAME, null, DB_VER);
+    }
+
+    @Override
+    public void onCreate(SQLiteDatabase db) {
+        String sql = "CREATE TABLE " + TABLE + " (" +
+                COL_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COL_TEXT + " TEXT NOT NULL)";
+        db.execSQL(sql);
+    }
+
+    @Override public void onUpgrade(SQLiteDatabase db, int oldV, int newV) {
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE);
+        onCreate(db);
+    }
+
+    // CRUD
+    public long insertNote(String text) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put(COL_TEXT, text);
+        return db.insert(TABLE, null, cv);
+    }
+
+    public Cursor getAllNotes() {
+        SQLiteDatabase db = getReadableDatabase();
+        return db.query(TABLE, null, null, null, null, null, COL_ID + " DESC");
+    }
+
+    public int updateNote(long id, String text) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put(COL_TEXT, text);
+        return db.update(TABLE, cv, COL_ID + "=?", new String[]{String.valueOf(id)});
+    }
+
+    public int deleteNote(long id) {
+        SQLiteDatabase db = getWritableDatabase();
+        return db.delete(TABLE, COL_ID + "=?", new String[]{String.valueOf(id)});
+    }
+}
+
+
+Simple UI: res/layout/activity_main.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="12dp"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <EditText
+        android:id="@+id/et_note"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Type note" />
+
+    <Button
+        android:id="@+id/btn_save"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Save" />
+
+    <ListView
+        android:id="@+id/list"
+        android:layout_marginTop="8dp"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+</LinearLayout>
+
+
+Activity: MainActivity.java
+
+package com.example.sqliteapp;
+
+import android.database.Cursor;
+import android.os.Bundle;
+import android.widget.*;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    MyDatabaseHelper db;
+    EditText et;
+    Button btn;
+    ListView list;
+    SimpleCursorAdapter adapter;
+
+    @Override
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        db = new MyDatabaseHelper(this);
+        et = findViewById(R.id.et_note);
+        btn = findViewById(R.id.btn_save);
+        list = findViewById(R.id.list);
+
+        btn.setOnClickListener(v -> {
+            String txt = et.getText().toString().trim();
+            if (!txt.isEmpty()) {
+                db.insertNote(txt);
+                et.setText("");
+                loadList();
+            } else {
+                Toast.makeText(this, "Enter text", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        list.setOnItemLongClickListener((parent, view, position, id) -> {
+            db.deleteNote(id);
+            loadList();
+            return true;
+        });
+
+        loadList();
+    }
+
+    private void loadList() {
+        Cursor c = db.getAllNotes();
+        if (adapter == null) {
+            adapter = new SimpleCursorAdapter(this,
+                    android.R.layout.simple_list_item_2,
+                    c,
+                    new String[]{"text", "id"},
+                    new int[]{android.R.id.text1, android.R.id.text2},
+                    0);
+            list.setAdapter(adapter);
+        } else {
+            adapter.changeCursor(c);
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (adapter != null && adapter.getCursor() != null) adapter.getCursor().close();
+    }
+}
+
+
+Notes: Long-press deletes a row. Update functionality can be added similarly.
+
+8. Progress bar (indeterminate + determinate simulated background task)
+
+Layout: res/layout/activity_main.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="16dp"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <Button
+        android:id="@+id/btn_start"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start Task" />
+
+    <ProgressBar
+        android:id="@+id/prog_ind"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_marginTop="16dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"/>
+
+    <ProgressBar
+        android:id="@+id/prog_det"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_marginTop="16dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="100"
+        android:progress="0"/>
+    <TextView
+        android:id="@+id/tv_percent"
+        android:layout_marginTop="8dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0%"/>
+</LinearLayout>
+
+
+Activity: MainActivity.java
+
+package com.example.progressapp;
+
+import android.os.Bundle;
+import android.os.Handler;
+import android.view.View;
+import android.widget.*;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    ProgressBar ind, det;
+    TextView tv;
+    Button btn;
+    Handler handler = new Handler();
+    int progress = 0;
+    Runnable tick = new Runnable() {
+        @Override
+        public void run() {
+            progress += 5;
+            det.setProgress(progress);
+            tv.setText(progress + "%");
+            if (progress < 100) {
+                handler.postDelayed(this, 300);
+            } else {
+                ind.setVisibility(View.GONE);
+                btn.setEnabled(true);
+            }
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        ind = findViewById(R.id.prog_ind);
+        det = findViewById(R.id.prog_det);
+        tv = findViewById(R.id.tv_percent);
+        btn = findViewById(R.id.btn_start);
+
+        btn.setOnClickListener(v -> {
+            progress = 0;
+            det.setProgress(0);
+            tv.setText("0%");
+            ind.setVisibility(View.VISIBLE);
+            btn.setEnabled(false);
+            handler.post(tick);
+        });
+    }
+}
+
+
+Notes: Simple simulated task using Handler. For real background tasks use WorkManager, AsyncTask (deprecated), or threads + handlers.
+
+9. Free hand drawing app (Canvas on a custom View)
+
+Layout: res/layout/activity_main.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="0dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.example.drawapp.DrawView
+        android:id="@+id/drawView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_margin="12dp"
+        android:orientation="horizontal"
+        android:layout_gravity="top|center_horizontal"
+        android:background="#88ffffff"
+        android:padding="8dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+        <Button android:id="@+id/btn_clear" android:text="Clear" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <Button android:id="@+id/btn_undo" android:text="Undo" android:layout_marginLeft="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+    </LinearLayout>
+</FrameLayout>
+
+
+Custom View: DrawView.java
+
+package com.example.drawapp;
+
+import android.content.Context;
+import android.graphics.*;
+import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.View;
+
+import java.util.ArrayList;
+
+public class DrawView extends View {
+    private Paint paint = new Paint();
+    private Path currentPath;
+    private ArrayList<Path> paths = new ArrayList<>();
+    private ArrayList<Path> undone = new ArrayList<>();
+
+    public DrawView(Context c, AttributeSet a) {
+        super(c, a);
+        paint.setAntiAlias(true);
+        paint.setStrokeWidth(8f);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        paint.setColor(Color.BLACK);
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        for (Path p : paths) canvas.drawPath(p, paint);
+        if (currentPath != null) canvas.drawPath(currentPath, paint);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        float x = event.getX(), y = event.getY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                currentPath = new Path();
+                currentPath.moveTo(x, y);
+                undone.clear();
+                invalidate();
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                currentPath.lineTo(x, y);
+                invalidate();
+                return true;
+            case MotionEvent.ACTION_UP:
+                paths.add(currentPath);
+                currentPath = null;
+                invalidate();
+                return true;
+        }
+        return super.onTouchEvent(event);
+    }
+
+    public void clear() {
+        paths.clear();
+        undone.clear();
+        invalidate();
+    }
+
+    public void undo() {
+        if (paths.size() > 0) {
+            undone.add(paths.remove(paths.size() - 1));
+            invalidate();
+        }
+    }
+}
+
+
+Activity: MainActivity.java
+
+package com.example.drawapp;
+
+import android.os.Bundle;
+import android.widget.Button;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    DrawView drawView;
+    @Override
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        drawView = findViewById(R.id.drawView);
+        Button clear = findViewById(R.id.btn_clear);
+        Button undo = findViewById(R.id.btn_undo);
+        clear.setOnClickListener(v -> drawView.clear());
+        undo.setOnClickListener(v -> drawView.undo());
+    }
+}
+
+10. Phone Calling App (dialer + direct CALL with runtime permission)
+
+Permissions (manifest):
+
+<uses-permission android:name="android.permission.CALL_PHONE" />
+
+
+Layout: res/layout/activity_main.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="16dp"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <EditText
+        android:id="@+id/et_number"
+        android:inputType="phone"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Phone number" />
+
+    <Button
+        android:id="@+id/btn_dial"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Open Dialer" />
+
+    <Button
+        android:id="@+id/btn_call"
+        android:layout_marginTop="8dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Call (requires permission)" />
+</LinearLayout>
+
+
+Activity: MainActivity.java
+
+package com.example.callapp;
+
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Bundle;
+import android.widget.*;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+public class MainActivity extends AppCompatActivity {
+    private static final int REQ_CALL = 2001;
+    EditText et;
+    @Override
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        et = findViewById(R.id.et_number);
+        Button dial = findViewById(R.id.btn_dial);
+        Button call = findViewById(R.id.btn_call);
+
+        dial.setOnClickListener(v -> {
+            String num = et.getText().toString().trim();
+            if (!num.isEmpty()) {
+                Intent i = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + num));
+                startActivity(i);
+            } else Toast.makeText(this, "Enter number", Toast.LENGTH_SHORT).show();
+        });
+
+        call.setOnClickListener(v -> {
+            String num = et.getText().toString().trim();
+            if (num.isEmpty()) { Toast.makeText(this, "Enter number", Toast.LENGTH_SHORT).show(); return; }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CALL_PHONE}, REQ_CALL);
+            } else {
+                startCall(num);
+            }
+        });
+    }
+
+    private void startCall(String num) {
+        Intent i = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + num));
+        startActivity(i);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, @NonNull String[] perms, @NonNull int[] grants) {
+        super.onRequestPermissionsResult(req, perms, grants);
+        if (req == REQ_CALL) {
+            if (grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) {
+                String num = et.getText().toString().trim();
+                if (!num.isEmpty()) startCall(num);
+            } else {
+                Toast.makeText(this, "Call permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+}
+
+
+Notes: Direct ACTION_CALL requires runtime permission; many app stores scrutinize auto-calling behavior. Consider ACTION_DIAL for safer UX.
+
+11. Create an Alarm Clock (schedule alarm with AlarmManager)
+
+Permissions: none special. Use AlarmManager and a BroadcastReceiver.
+
+Manifest: register receiver inside <application>:
+
+<receiver android:name=".AlarmReceiver" android:exported="true"/>
+
+
+Layout: res/layout/activity_main.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="16dp"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TimePicker
+        android:id="@+id/timePicker"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:timePickerMode="spinner"/>
+    <Button android:id="@+id/btn_set" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Set Alarm"/>
+    <Button android:id="@+id/btn_cancel" android:layout_marginTop="8dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Cancel Alarm"/>
+</LinearLayout>
+
+
+Receiver: AlarmReceiver.java
+
+package com.example.alarmapp;
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.media.RingtoneManager;
+import android.net.Uri;
+import android.widget.Toast;
+import android.media.MediaPlayer;
+
+public class AlarmReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context ctx, Intent intent) {
+        // Show toast and play default alarm sound (simple)
+        Toast.makeText(ctx, "Alarm! 🎵", Toast.LENGTH_LONG).show();
+        try {
+            Uri alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+            if (alarmUri == null) alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            MediaPlayer mp = MediaPlayer.create(ctx, alarmUri);
+            mp.setLooping(true);
+            mp.start();
+            // Note: mp will stop when app process is killed. For robust alarms, start a foreground service or notification activity.
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+Activity: MainActivity.java
+
+package com.example.alarmapp;
+
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.os.Build;
+import android.os.Bundle;
+import android.widget.*;
+import androidx.appcompat.app.AppCompatActivity;
+import java.util.Calendar;
+
+public class MainActivity extends AppCompatActivity {
+    TimePicker tp;
+    Button btnSet, btnCancel;
+    AlarmManager alarmManager;
+    PendingIntent pendingIntent;
+
+    @Override
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        tp = findViewById(R.id.timePicker);
+        btnSet = findViewById(R.id.btn_set);
+        btnCancel = findViewById(R.id.btn_cancel);
+        alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+
+        btnSet.setOnClickListener(v -> {
+            int hour = tp.getHour();
+            int minute = tp.getMinute();
+            Calendar cal = Calendar.getInstance();
+            cal.set(Calendar.HOUR_OF_DAY, hour);
+            cal.set(Calendar.MINUTE, minute);
+            cal.set(Calendar.SECOND, 0);
+            if (cal.before(Calendar.getInstance())) cal.add(Calendar.DAY_OF_YEAR, 1);
+
+            Intent intent = new Intent(this, AlarmReceiver.class);
+            pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pendingIntent);
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pendingIntent);
+            }
+            Toast.makeText(this, "Alarm set: " + hour + ":" + String.format("%02d", minute), Toast.LENGTH_SHORT).show();
+        });
+
+        btnCancel.setOnClickListener(v -> {
+            Intent intent = new Intent(this, AlarmReceiver.class);
+            pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+            alarmManager.cancel(pendingIntent);
+            Toast.makeText(this, "Alarm canceled", Toast.LENGTH_SHORT).show();
+        });
+    }
+}
+
+
+Notes: For persistent sounds even if the app is killed, use a foreground service started from the BroadcastReceiver.
+
+12. List all the sensors in Android (programmatically)
+
+This lists available sensors using SensorManager.
+
+Layout: res/layout/activity_main.xml simple ListView:
+
+<ListView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/list"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+
+
+Activity: MainActivity.java
+
+package com.example.sensorsapp;
+
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
+import android.os.Bundle;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
+import androidx.appcompat.app.AppCompatActivity;
+import java.util.ArrayList;
+import java.util.List;
+
+public class MainActivity extends AppCompatActivity {
+    SensorManager sensorManager;
+    ListView listView;
+
+    @Override
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        listView = findViewById(R.id.list);
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        List<Sensor> sensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
+
+        ArrayList<String> items = new ArrayList<>();
+        for (Sensor sensor : sensors) {
+            items.add(sensor.getName() + " — " + sensor.getType() + " — " + sensor.getVendor());
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, items);
+        listView.setAdapter(adapter);
+    }
+}
+
+
+Notes: Sensor.TYPE_ALL lists device sensors (accelerometer, gyroscope, magnetometer, light, proximity, etc.). Type codes correspond to constants in Sensor.
+
+13. Convert Text to Speech in Android (TTS)
+
+Manifest: none extra (uses no special permission).
+
+Layout: res/layout/activity_main.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="16dp"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <EditText android:id="@+id/et_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Enter text"/>
+    <Button android:id="@+id/btn_speak" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Speak"/>
+</LinearLayout>
+
+
+Activity: MainActivity.java
+
+package com.example.ttsapp;
+
+import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
+import android.widget.*;
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.Locale;
+
+public class MainActivity extends AppCompatActivity {
+    TextToSpeech tts;
+    EditText et;
+    Button btn;
+
+    @Override
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        et = findViewById(R.id.et_text);
+        btn = findViewById(R.id.btn_speak);
+
+        tts = new TextToSpeech(this, status -> {
+            if (status == TextToSpeech.SUCCESS) {
+                int res = tts.setLanguage(Locale.getDefault());
+                if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    Toast.makeText(this, "TTS language not supported", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        btn.setOnClickListener(v -> {
+            String txt = et.getText().toString();
+            if (!txt.isEmpty()) {
+                tts.speak(txt, TextToSpeech.QUEUE_FLUSH, null, "tts1");
+            }
+        });
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+        }
+        super.onDestroy();
+    }
+}
+
+14. Create a Flutter application in Android Studio (instructions + minimal main.dart)
+
+I can't run flutter create here, but here's the minimal main.dart you can paste into lib/main.dart in a Flutter project.
+
+Steps to create project in Android Studio (brief):
+
+File → New → New Flutter Project → Flutter Application.
+
+Set project name, SDK path, etc. Finish.
+
+Replace lib/main.dart with the code below.
+
+lib/main.dart
+
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Simple Flutter App',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: HomePage(),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int counter = 0;
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Flutter App')),
+      body: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('You pressed the button this many times:'),
+          SizedBox(height: 12),
+          Text('$counter', style: TextStyle(fontSize: 40)),
+        ]),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => setState(() => counter++),
+        child: Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+
+Notes: Make sure Flutter & Dart SDKs are installed and Android Studio has Flutter plugin.
+
+15. Create an Android Game (simple 2D "Ball Bounce" game on Canvas)
+
+A small game implemented as a GameView custom view which animates a ball bouncing and being tapped to increase speed.
+
+Layout: res/layout/activity_main.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <com.example.game.BallGameView
+        android:id="@+id/gameView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+    <TextView
+        android:id="@+id/tv_score"
+        android:layout_margin="16dp"
+        android:layout_gravity="top|start"
+        android:background="#66000000"
+        android:padding="8dp"
+        android:textColor="#fff"
+        android:text="Score: 0"/>
+</FrameLayout>
+
+
+Custom View: BallGameView.java
+
+package com.example.game;
+
+import android.content.Context;
+import android.graphics.*;
+import android.os.Handler;
+import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.View;
+
+public class BallGameView extends View {
+    private float x, y, vx = 8, vy = 6, radius = 50;
+    private Paint paint = new Paint();
+    private int width, height;
+    private Handler handler = new Handler();
+    private Runnable updater;
+    private int score = 0;
+    private OnScoreChangeListener listener;
+
+    public BallGameView(Context ctx, AttributeSet a) {
+        super(ctx, a);
+        paint.setAntiAlias(true);
+        paint.setColor(Color.rgb(255, 100, 100));
+        updater = this::update;
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w,h,oldw,oldh);
+        width = w; height = h;
+        x = w / 2f; y = h / 2f;
+        handler.postDelayed(updater, 16);
+    }
+
+    private void update() {
+        x += vx; y += vy;
+        if (x - radius < 0) { x = radius; vx = -vx; score++; notifyScore(); }
+        if (x + radius > width) { x = width - radius; vx = -vx; score++; notifyScore(); }
+        if (y - radius < 0) { y = radius; vy = -vy; score++; notifyScore(); }
+        if (y + radius > height) { y = height - radius; vy = -vy; score++; notifyScore(); }
+        invalidate();
+        handler.postDelayed(updater, 16);
+    }
+
+    private void notifyScore() {
+        if (listener != null) listener.onScoreChanged(score);
+    }
+
+    @Override
+    protected void onDraw(Canvas c) {
+        super.onDraw(c);
+        c.drawCircle(x, y, radius, paint);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent ev) {
+        if (ev.getAction() == MotionEvent.ACTION_DOWN) {
+            // If touch near ball, speed up
+            float dx = ev.getX() - x, dy = ev.getY() - y;
+            if (dx*dx + dy*dy <= radius*radius) {
+                vx *= 1.2; vy *= 1.2;
+                return true;
+            }
+        }
+        return super.onTouchEvent(ev);
+    }
+
+    public void setOnScoreChangeListener(OnScoreChangeListener l) { listener = l; }
+
+    public interface OnScoreChangeListener { void onScoreChanged(int newScore); }
+}
+
+
+Activity: MainActivity.java
+
+package com.example.game;
+
+import android.os.Bundle;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    BallGameView gameView;
+    TextView tv;
+    @Override
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        gameView = findViewById(R.id.gameView);
+        tv = findViewById(R.id.tv_score);
+        gameView.setOnScoreChangeListener(newScore -> runOnUiThread(() -> tv.setText("Score: " + newScore)));
+    }
+}
+
+
+Notes: Very small game loop using Handler and postDelayed. For more advanced games, use SurfaceView, OpenGL, or a game engine (LibGDX, Unity).
